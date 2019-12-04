@@ -79,6 +79,25 @@ extern "C" {
         osr: *const OpenSlideT,
         name: *const libc::c_char,
     ) -> *const libc::c_char;
+
+    // ---------------
+    // Associated Images
+    // ---------------
+
+    fn openslide_get_associated_image_names(osr: *const OpenSlideT) -> *const *const libc::c_char;
+
+    fn openslide_get_associated_image_dimensions(
+        osr: *const OpenSlideT,
+        name: *const libc::c_char,
+        w: *mut libc::int64_t,
+        h: *mut libc::int64_t,
+    ) -> libc::c_void;
+
+    fn openslide_read_associated_image(
+        osr: *const OpenSlideT,
+        name: *const libc::c_char,
+        dest: *mut libc::uint32_t,
+    ) -> libc::c_void;
 }
 
 // ---------------
@@ -213,3 +232,54 @@ pub unsafe fn get_property_value(osr: *const OpenSlideT, name: &str) -> Result<S
     };
     Ok(value)
 }
+
+
+// ---------------
+// Associated Images
+// ---------------
+
+/// Get the NULL-terminated array of property names.
+pub unsafe fn get_associated_image_names(osr: *const OpenSlideT) -> Result<Vec<String>, Error> {
+    let string_values = {
+        let null_terminated_array_ptr = openslide_get_associated_image_names(osr);
+        let mut counter = 0;
+        let mut loc = null_terminated_array_ptr;
+        while !(*loc).is_null() {
+            counter += 1;
+            loc = loc.offset(1);
+        }
+        //let c_array = ffi::CStr::from_ptr(null_terminated_array_ptr);
+        let values = std::slice::from_raw_parts(null_terminated_array_ptr, counter as usize);
+        values
+            .iter()
+            .map(|&p| ffi::CStr::from_ptr(p)) // iterator of &CStr
+            .map(|cs| cs.to_bytes()) // iterator of &[u8]
+            .map(|bs| str::from_utf8(bs).unwrap()) // iterator of &str
+            .map(|ss| ss.to_owned())
+            .collect()
+    };
+    Ok(string_values)
+}
+
+pub unsafe fn get_associated_image_dimensions(osr: *const OpenSlideT, name: &str) -> Result<(i64, i64), Error> {
+    let c_name = ffi::CString::new(name)?;
+    let mut width: libc::int64_t = 0;
+    let mut height: libc::int64_t = 0;
+    openslide_get_associated_image_dimensions(osr, c_name.as_ptr(), &mut width, &mut height); // This is unsafe
+    Ok((width, height))
+}
+
+/// Copy pre-multiplied ARGB data from an associated image.
+pub unsafe fn read_associated_image(
+    osr: *const OpenSlideT,
+    name: &str
+) -> Result<Vec<u32>, Error> {
+    let (w, h) = get_associated_image_dimensions(osr, &name)?;
+    let c_name = ffi::CString::new(name)?;
+    let mut buffer: Vec<libc::uint32_t> = Vec::with_capacity((h * w) as usize);
+    let p_buffer = buffer.as_mut_ptr();
+    openslide_read_associated_image(osr, c_name.as_ptr(), p_buffer); // This is unsafe
+    buffer.set_len((h * w) as usize);
+    Ok(buffer)
+}
+

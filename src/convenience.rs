@@ -376,4 +376,21 @@ impl OpenSlide {
         }
         Ok(())
     }
+
+    /// Get associated images with the current slide
+    pub fn get_associated_images(&self) -> Result<HashMap<String, RgbaImage>, Error> {
+        let mut associated_images = HashMap::<String, RgbaImage>::new();
+        for name in unsafe { bindings::get_associated_image_names(self.osr)? } {
+            let (width, height) = unsafe {
+                bindings::get_associated_image_dimensions(self.osr, &name)?
+            };
+            let word_repr = utils::WordRepresentation::BigEndian;
+            let buffer = unsafe {
+                bindings::read_associated_image(self.osr, &name)?
+            };
+            let img = utils::decode_buffer(&buffer, height as u32, width as u32, word_repr)?;
+            associated_images.insert(name.clone(), img);
+        }
+        Ok(associated_images)
+    }
 }

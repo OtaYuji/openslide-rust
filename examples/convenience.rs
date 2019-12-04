@@ -18,7 +18,7 @@ fn basic_usage(
     println!("Downsample factor at level 0: {}", os.get_level_downsample(0)?);
     println!("Best level for downsampling factor 4.5: {}", os.get_best_level_for_downsample(4.5)?);
 
-    let im = os.read_region(1500, 1000, 0, 512, 512)?;
+    let im = os.read_region(1500 as u64, 1000 as u64, 0, 512, 512)?;
     im.save("/tmp/wsi_region_2.png")?;
 
     println!("\nPrint properties from the dictionary");
@@ -27,6 +27,11 @@ fn basic_usage(
     }
     println!("\nPrint available properties using the properties module");
     os.properties.print_available();
+
+    let associated_images = os.get_associated_images()?;
+    for (name, img) in &associated_images {
+        img.save(format!("/tmp/associated_image_{}.png", name))?;
+    }
 
     Ok(())
 }
